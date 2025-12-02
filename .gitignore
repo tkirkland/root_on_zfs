@@ -1,0 +1,65 @@
+# Log files
+*.log
+/var/log/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.*.sw?
+
+# Backup files
+*.bak
+*.backup
+*-old
+*.orig
+
+# System files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor directories
+.vscode/
+.idea/
+*.sublime-*
+
+# Bash history
+.bash_history
+
+# Test/temp directories
+/tmp/
+/temp/
+
+# Installation artifacts
+/mnt/
+*.squashfs
+
+# Cryptographic keys (security)
+*.key
+*.pem
+*.crt
+*.cer
+*.pfx
+*.p12
+
+# Distribution archives
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.rar
+*.7z
+
+# Core dumps
+core
+core.*
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.dll
