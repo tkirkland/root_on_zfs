@@ -200,9 +200,10 @@ function get_disk_id() {
   local total_disks="$3"
   local diskid_menu="/tmp/diskidmenu.txt"
 
+  # Exclude Windows install disk (nvme-eui.0025384331411c20)
   find /dev/disk/by-id -maxdepth 1 -type l ! -name '*-part*' \
     -exec sh -c 'for f; do printf "%s %s\n" "$(basename "$f")" "$(readlink "$f")"; done' _ {} + \
-    | grep -vE "(CD-ROM|^nvme-eui\.|^nvme-nvme\.|_1 )" > "${diskid_menu}"
+    | grep -E "(^ata-|^scsi-|^nvme-eui\.)" | grep -v "0025384331411c20" > "${diskid_menu}"
 
   echo "Please select Disk ID for disk ${disk_num} of ${total_disks} on ${pool} pool."
   nl "${diskid_menu}"
@@ -272,6 +273,37 @@ function get_disk_id_pool() {
 # Clear partition table on disks
 function clear_partition_table() {
   local pool="$1"
+
+  # Stop ZFS services that may hold disks
+  echo "Stopping ZFS services..."
+  systemctl stop zfs-zed 2>/dev/null || true
+  systemctl stop zfs-mount 2>/dev/null || true
+  systemctl stop zfs-share 2>/dev/null || true
+
+  # Export or destroy any existing pools on selected disks
+  while IFS= read -r diskid; do
+    local device
+    device="/dev/disk/by-id/${diskid}"
+
+    # Find any pools using this disk
+    local pools_on_disk
+    pools_on_disk=$(zpool status 2>/dev/null | grep -B20 "${diskid}" | grep "pool:" | awk '{print $2}' || true)
+
+    for zpool_name in ${pools_on_disk}; do
+      if [[ -n "${zpool_name}" ]]; then
+        echo "Destroying pool '${zpool_name}' on disk ${diskid}..."
+        zpool destroy -f "${zpool_name}" 2>/dev/null || true
+      fi
+    done
+  done < "/tmp/diskid_check_${pool}.txt"
+
+  # Also destroy the target pool name if it exists
+  if zpool status "${rpool}" &>/dev/null; then
+    echo "Destroying existing pool '${rpool}'..."
+    zpool destroy -f "${rpool}" 2>/dev/null || true
+  fi
+
+  sleep 2
 
   while IFS= read -r diskid; do
     echo "Clearing partition table on disk ${diskid}."
@@ -570,22 +602,26 @@ EOSCRIPT
 function prepare_install_environment() {
   export debian_priority="${install_warning_level#*=}"
 
-  # Ensure required tools are available from live environment
+  # Install required packages if not present
+  echo "Checking and installing required packages..."
+  apt-get update
+
   if ! command -v sgdisk &>/dev/null; then
-    echo "ERROR: gdisk/sgdisk not found. Required for partitioning."
-    exit 1
+    echo "Installing gdisk..."
+    apt-get install -y gdisk
   fi
 
   if ! command -v zpool &>/dev/null; then
-    echo "ERROR: ZFS tools not found in live environment."
-    exit 1
+    echo "Installing ZFS utilities..."
+    apt-get install -y zfsutils-linux zfs-zed zfs-initramfs
+  fi
+
+  if ! command -v partprobe &>/dev/null; then
+    echo "Installing parted..."
+    apt-get install -y parted
   fi
 
   keyboard_console_settings
-
-  if systemctl is-active --quiet zfs-zed 2>/dev/null; then
-    systemctl stop zfs-zed
-  fi
 
   clear_partition_table "root"
   partprobe
@@ -702,6 +738,10 @@ function extract_live_filesystem() {
   case "${squashfs_type}" in
     mounted)
       # Copy from already-mounted filesystem
+      if ! command -v rsync &>/dev/null; then
+        echo "Installing rsync..."
+        apt-get install -y rsync
+      fi
       echo "Copying from mounted filesystem at ${squashfs_path}..."
       rsync -aHAXS --info=progress2 "${squashfs_path}/" "${mountpoint}/"
       ;;
@@ -822,18 +862,20 @@ function system_setup_part1() {
 #  None
 #######################################
 function system_setup_part2() {
-  # Most packages should already be present from the live filesystem
-  #   to ensure ZFS tools are properly configured
+  # Install essential packages if not present
   chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
-		# Verify essential packages are present
+		apt-get update
+
+		# Install kernel if not present
 		if ! dpkg -l linux-image-generic &>/dev/null; then
-		  echo "ERROR: linux-image-generic not found in extracted filesystem"
-		  exit 1
+		  echo "Installing linux-image-generic..."
+		  apt-get install -y linux-image-generic linux-headers-generic
 		fi
 
+		# Install ZFS packages if not present
 		if ! dpkg -l zfsutils-linux &>/dev/null; then
-		  echo "ERROR: zfsutils-linux not found in extracted filesystem"
-		  exit 1
+		  echo "Installing ZFS packages..."
+		  apt-get install -y zfsutils-linux zfs-zed zfs-initramfs
 		fi
 
 		# Ensure ZFS services are enabled
