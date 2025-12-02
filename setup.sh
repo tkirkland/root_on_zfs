@@ -8,13 +8,13 @@
 #
 # Usage: script_filename {initial|postreboot|remoteaccess|datapool}
 #
-# Part 1: Run with "initial" option from Ubuntu live ISO (desktop version).
-# Part 2: Reboot into new install, login as user/password defined below.
-# Part 3: Run with "postreboot" option to complete installation.
+# Part 1: Run with the "initial" option from Ubuntu live ISO (desktop version).
+# Part 2: Reboot into a new installation, login as user/password defined below.
+# Part 3: Run with the "postreboot" option to complete installation.
 
-# Log all output to file
+# Log all output to a file
 function log_func() {
-  exec > >(tee -a "${LOG_LOC}/${INSTALL_LOG}") 2>&1
+  exec > >(tee -a "${log_loc}/${install_log}") 2>&1
 }
 
 # Display disclaimer and wait for confirmation
@@ -48,7 +48,7 @@ function locate_squashfs() {
     return 0
   fi
 
-  # Search for squashfs file
+  # Search for the squashfs file
   for path in "${search_paths[@]}"; do
     if [[ -f "${path}" ]]; then
       squashfs_path="${path}"
@@ -58,7 +58,7 @@ function locate_squashfs() {
     fi
   done
 
-  # Search mounted filesystems for casper directory
+  # Search mounted filesystems for the casper directory
   while IFS= read -r mount_point; do
     if [[ -f "${mount_point}/casper/filesystem.squashfs" ]]; then
       squashfs_path="${mount_point}/casper/filesystem.squashfs"
@@ -116,7 +116,7 @@ function live_desktop_check() {
   live_version="$(. /etc/os-release && echo "${VERSION_CODENAME}")"
   live_version="${live_version,,}"  # lowercase
 
-  if [[ "${live_version}" != "${UBUNTU_VER,,}" ]]; then
+  if [[ "${live_version}" != "${ubuntu_ver,,}" ]]; then
     echo "Live environment version mismatch."
     echo "Live version must match Ubuntu version to install."
     exit 1
@@ -145,7 +145,7 @@ function keyboard_console_settings() {
   export debian_frontend=dialog
   dpkg-reconfigure keyboard-configuration
   dpkg-reconfigure console-setup
-  export debian_priority="${INSTALL_WARNING_LEVEL#*=}"
+  export debian_priority="${install_warning_level#*=}"
 
   debconf-get-selections | grep keyboard-configuration > "${kb_console_settings}"
   debconf-get-selections | grep console-setup >> "${kb_console_settings}"
@@ -302,7 +302,7 @@ echo "Choosing fastest up-to-date ubuntu mirror..."
 
   # Get 20 random mirrors to test
   local mirrors
-  mirrors=$(curl -s "https://mirrors.ubuntu.com/${MIRROR_ARCHIVE}.txt" | shuf -n 20)
+  mirrors=$(curl -s "https://mirrors.ubuntu.com/${mirror_archive}.txt" | shuf -n 20)
 
   # Check each mirror for freshness
   ubuntu_mirror=$(
@@ -329,9 +329,9 @@ echo "Choosing fastest up-to-date ubuntu mirror..."
 
   if [[ -z "${ubuntu_mirror}" ]]; then
     echo "No mirror identified. No changes made."
-  elif [[ "${UBUNTU_ORIGINAL}" != "${ubuntu_mirror}" ]]; then
+  elif [[ "${ubuntu_original}" != "${ubuntu_mirror}" ]]; then
     cp "${apt_data_sources_loc}" "${apt_data_sources_loc}.non-mirror"
-    sed -i "s,${UBUNTU_ORIGINAL},${ubuntu_mirror},g" "${apt_data_sources_loc}"
+    sed -i "s,${ubuntu_original},${ubuntu_mirror},g" "${apt_data_sources_loc}"
     echo "Selected '${ubuntu_mirror}'."
   else
     echo "Identified mirror is already selected."
@@ -340,26 +340,26 @@ echo "Choosing fastest up-to-date ubuntu mirror..."
 
 # Copy install log to a new installation
 function log_copy() {
-  if [[ -d "${MOUNTPOINT}" ]]; then
-    cp "${LOG_LOC}/${INSTALL_LOG}" "${MOUNTPOINT}${LOG_LOC}/"
+  if [[ -d "${mountpoint}" ]]; then
+    cp "${log_loc}/${install_log}" "${mountpoint}${log_loc}/"
     echo "Log file copied into new installation."
   else
     echo "No mountpoint dir present. Install log not copied."
   fi
 }
 
-# Copy script to new installation
+# Copy script to a new installation
 function script_copy() {
-  cp "$(readlink -f "$0")" "${MOUNTPOINT}/home/${NEW_USER}/"
+  cp "$(readlink -f "$0")" "${mountpoint}/home/${new_user}/"
   local script_loc
-  script_loc="/home/${NEW_USER}/$(basename "$0")"
+  script_loc="/home/${new_user}/$(basename "$0")"
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
-		chown "${NEW_USER}:${NEW_USER}" "${script_loc}"
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
+		chown "${new_user}:${new_user}" "${script_loc}"
 		chmod +x "${script_loc}"
 	EOCHROOT
 
-  if [[ -f "${MOUNTPOINT}${script_loc}" ]]; then
+  if [[ -f "${mountpoint}${script_loc}" ]]; then
     echo "Install script copied to new installation."
   else
     echo "Error copying install script."
@@ -371,33 +371,33 @@ function script_copy() {
 # Create ZFS pool
 function create_zpool() {
   local pool="$1"
-  local ashift keylocation zpool_password zpool_encrypt zpool_partition zpool_name topology
+  local ashift zpool_password zpool_encrypt zpool_partition zpool_name topology keylocation
 
   case "${pool}" in
     root)
-      ashift="${ZFS_RPOOL_ASHIFT}"
+      ashift="${zfs_rpool_ashift}"
       keylocation="prompt"
-      zpool_password="${ZFS_ROOT_PASSWORD}"
-      zpool_encrypt="${ZFS_ROOT_ENCRYPT}"
+      zpool_password="${zfs_root_password}"
+      zpool_encrypt="${zfs_root_encrypt}"
       zpool_partition="-part3"
-      zpool_name="${RPOOL}"
-      topology="${TOPOLOGY_ROOT}"
+      zpool_name="${rpool}"
+      topology="${topology_root}"
       ;;
     data)
-      ashift="${ZFS_DPOOL_ASHIFT}"
-      zpool_password="${ZFS_DATA_PASSWORD}"
-      zpool_encrypt="${ZFS_DATA_ENCRYPT}"
+      ashift="${zfs_dpool_ashift}"
+      zpool_password="${zfs_data_password}"
+      zpool_encrypt="${zfs_data_encrypt}"
       zpool_partition=""
-      zpool_name="${DATAPOOL}"
-      topology="${TOPOLOGY_DATA}"
+      zpool_name="${datapool}"
+      topology="${topology_data}"
 
-      if [[ -n "${ZFS_ROOT_PASSWORD}" ]]; then
-        case "${ZFS_ROOT_ENCRYPT}" in
+      if [[ -n "${zfs_root_password}" ]]; then
+        case "${zfs_root_encrypt}" in
           native)
-            keylocation="file:///etc/zfs/${RPOOL}.key"
+            keylocation="file:///etc/zfs/${rpool}.key"
             ;;
           luks)
-            keylocation="file:///etc/cryptsetup-keys.d/${RPOOL}.key"
+            keylocation="file:///etc/cryptsetup-keys.d/${rpool}.key"
             ;;
         esac
       else
@@ -413,7 +413,7 @@ zpool create -f \\
   -o ashift=${ashift} \\
   -o autotrim=on \\
   -O acltype=posixacl \\
-  -O compression=${ZFS_COMPRESSION} \\
+  -O compression=${zfs_compression} \\
   -O normalization=formD \\
   -O relatime=on \\
   -O dnodesize=auto \\
@@ -433,9 +433,9 @@ EOF
   fi
 
   if [[ "${pool}" == "root" ]]; then
-    echo "  -O mountpoint=/ -R ${MOUNTPOINT} \\" >> "${zpool_create_temp}"
+    echo "  -O mountpoint=/ -R ${mountpoint} \\" >> "${zpool_create_temp}"
   else
-    echo "  -O mountpoint=${DATAPOOL_MOUNT} \\" >> "${zpool_create_temp}"
+    echo "  -O mountpoint=${datapool_mount} \\" >> "${zpool_create_temp}"
   fi
 
   # Add topology and disks
@@ -502,12 +502,12 @@ set -euo pipefail
 
 case "${pool}" in
   root)
-    zpool_password="${ZFS_ROOT_PASSWORD}"
+    zpool_password="${zfs_root_password}"
     zpool_partition="-part3"
     crypttab_parameters="luks,discard,initramfs"
     ;;
   data)
-    zpool_password="${ZFS_DATA_PASSWORD}"
+    zpool_password="${zfs_data_password}"
     zpool_partition=""
     crypttab_parameters="luks,discard"
     ;;
@@ -521,9 +521,9 @@ while IFS= read -r diskid; do
   blkid_luks="\$(blkid -s UUID -o value "/dev/disk/by-id/\${diskid}\${zpool_partition}")"
 
   echo "\${zpool_password}" | \\
-    cryptsetup -v luksAddKey "/dev/disk/by-uuid/\${blkid_luks}" "/etc/cryptsetup-keys.d/${RPOOL}.key"
+    cryptsetup -v luksAddKey "/dev/disk/by-uuid/\${blkid_luks}" "/etc/cryptsetup-keys.d/${rpool}.key"
 
-  echo "\${luks_dmname} UUID=\${blkid_luks} /etc/cryptsetup-keys.d/${RPOOL}.key \${crypttab_parameters}" >> /etc/crypttab
+  echo "\${luks_dmname} UUID=\${blkid_luks} /etc/cryptsetup-keys.d/${rpool}.key \${crypttab_parameters}" >> /etc/crypttab
 
   ((loop_counter++))
 done < "/tmp/diskid_check_${pool}.txt"
@@ -534,9 +534,9 @@ EOSCRIPT
 
   case "${script_env}" in
     chroot)
-      cp "/tmp/diskid_check_${pool}.txt" "${MOUNTPOINT}/tmp/"
-      cp "/tmp/update_crypttab_${pool}.sh" "${MOUNTPOINT}/tmp/"
-      chroot "${MOUNTPOINT}" /bin/bash -x "/tmp/update_crypttab_${pool}.sh"
+      cp "/tmp/diskid_check_${pool}.txt" "${mountpoint}/tmp/"
+      cp "/tmp/update_crypttab_${pool}.sh" "${mountpoint}/tmp/"
+      chroot "${mountpoint}" /bin/bash -x "/tmp/update_crypttab_${pool}.sh"
       ;;
     base)
       if grep -q casper /proc/cmdline; then
@@ -557,18 +557,18 @@ EOSCRIPT
 # description
 # Globals:
 #   debian_priority
-#   EFI_BOOT_SIZE
-#   INSTALL_WARNING_LEVEL
-#   TOPOLOGY_ROOT
-#   ZFS_ROOT_ENCRYPT
-#   ZFS_ROOT_PASSWORD
+#   efi_boot_size
+#   install_warning_level
+#   topology_root
+#   zfs_root_encrypt
+#   zfs_root_password
 #   diskid
 #   swap_size
 # Arguments:
 #  None
 #######################################
 function prepare_install_environment() {
-  export debian_priority="${INSTALL_WARNING_LEVEL#*=}"
+  export debian_priority="${install_warning_level#*=}"
 
   # Ensure required tools are available from live environment
   if ! command -v sgdisk &>/dev/null; then
@@ -594,7 +594,7 @@ function prepare_install_environment() {
   # Create partitions
   local swap_hex_code root_hex_code
 
-  case "${TOPOLOGY_ROOT}" in
+  case "${topology_root}" in
     single|mirror)
       swap_hex_code="8200"
       ;;
@@ -603,8 +603,8 @@ function prepare_install_environment() {
       ;;
   esac
 
-  if [[ -n "${ZFS_ROOT_PASSWORD}" ]]; then
-    case "${ZFS_ROOT_ENCRYPT}" in
+  if [[ -n "${zfs_root_password}" ]]; then
+    case "${zfs_root_encrypt}" in
       native)
         root_hex_code="BF00"
         ;;
@@ -618,7 +618,7 @@ function prepare_install_environment() {
 
   while IFS= read -r diskid; do
     echo "Creating partitions on disk ${diskid}."
-    sgdisk -n1:1M:+"${EFI_BOOT_SIZE}"M -t1:EF00 "/dev/disk/by-id/${diskid}"
+    sgdisk -n1:1M:+"${efi_boot_size}"M -t1:EF00 "/dev/disk/by-id/${diskid}"
     sgdisk -n2:0:+"${swap_size}"M -t2:"${swap_hex_code}" "/dev/disk/by-id/${diskid}"
     sgdisk -n3:0:0 -t3:"${root_hex_code}" "/dev/disk/by-id/${diskid}"
   done < "/tmp/diskid_check_root.txt"
@@ -630,9 +630,9 @@ function prepare_install_environment() {
 #######################################
 # description
 # Globals:
-#   MOUNTPOINT
+#   mountpoint
 #   rootzfs_full_name
-#   RPOOL
+#   rpool
 # Arguments:
 #  None
 #######################################
@@ -643,46 +643,46 @@ function create_zfs_pools() {
   sleep 2
 
   # Create filesystem datasets
-  zfs create -o canmount=off -o mountpoint=none "${RPOOL}/ROOT"
+  zfs create -o canmount=off -o mountpoint=none "${rpool}/ROOT"
 
   rootzfs_full_name="ubuntu.$(date +%Y.%m.%d)"
-  zfs create -o canmount=noauto -o mountpoint=/ "${RPOOL}/ROOT/${rootzfs_full_name}"
-  zfs mount "${RPOOL}/ROOT/${rootzfs_full_name}"
-  zpool set bootfs="${RPOOL}/ROOT/${rootzfs_full_name}" "${RPOOL}"
+  zfs create -o canmount=noauto -o mountpoint=/ "${rpool}/ROOT/${rootzfs_full_name}"
+  zfs mount "${rpool}/ROOT/${rootzfs_full_name}"
+  zpool set bootfs="${rpool}/ROOT/${rootzfs_full_name}" "${rpool}"
 
   # Create system datasets
-  zfs create "${RPOOL}/srv"
-  zfs create -o canmount=off "${RPOOL}/usr"
-  zfs create "${RPOOL}/usr/local"
-  zfs create -o canmount=off "${RPOOL}/var"
-  zfs create -o canmount=off "${RPOOL}/var/lib"
-  zfs create "${RPOOL}/var/games"
-  zfs create "${RPOOL}/var/log"
-  zfs create "${RPOOL}/var/mail"
-  zfs create "${RPOOL}/var/snap"
-  zfs create "${RPOOL}/var/spool"
-  zfs create "${RPOOL}/var/www"
+  zfs create "${rpool}/srv"
+  zfs create -o canmount=off "${rpool}/usr"
+  zfs create "${rpool}/usr/local"
+  zfs create -o canmount=off "${rpool}/var"
+  zfs create -o canmount=off "${rpool}/var/lib"
+  zfs create "${rpool}/var/games"
+  zfs create "${rpool}/var/log"
+  zfs create "${rpool}/var/mail"
+  zfs create "${rpool}/var/snap"
+  zfs create "${rpool}/var/spool"
+  zfs create "${rpool}/var/www"
 
   # User data datasets
-  zfs create "${RPOOL}/home"
-  zfs create -o mountpoint=/root "${RPOOL}/home/root"
-  chmod 700 "${MOUNTPOINT}/root"
+  zfs create "${rpool}/home"
+  zfs create -o mountpoint=/root "${rpool}/home/root"
+  chmod 700 "${mountpoint}/root"
 
   # Exclude from snapshots
-  zfs create -o com.sun:auto-snapshot=false "${RPOOL}/var/cache"
-  zfs create -o com.sun:auto-snapshot=false "${RPOOL}/var/tmp"
-  chmod 1777 "${MOUNTPOINT}/var/tmp"
-  zfs create -o com.sun:auto-snapshot=false "${RPOOL}/var/lib/docker"
+  zfs create -o com.sun:auto-snapshot=false "${rpool}/var/cache"
+  zfs create -o com.sun:auto-snapshot=false "${rpool}/var/tmp"
+  chmod 1777 "${mountpoint}/var/tmp"
+  zfs create -o com.sun:auto-snapshot=false "${rpool}/var/lib/docker"
 
   # Mount tmpfs at /run
-  mkdir -p "${MOUNTPOINT}/run"
-  mount -t tmpfs tmpfs "${MOUNTPOINT}/run"
+  mkdir -p "${mountpoint}/run"
+  mount -t tmpfs tmpfs "${mountpoint}/run"
 }
 
 #######################################
 # description
 # Globals:
-#   MOUNTPOINT
+#   mountpoint
 #   squashfs_path
 #   squashfs_type
 # Arguments:
@@ -690,20 +690,20 @@ function create_zfs_pools() {
 #######################################
 function extract_live_filesystem() {
   local free_space
-  free_space="$(df -k --output=avail "${MOUNTPOINT}" | tail -n1)"
+  free_space="$(df -k --output=avail "${mountpoint}" | tail -n1)"
 
   if [[ "${free_space}" -lt 5242880 ]]; then
     echo "Less than 5 GBs free!"
     exit 1
   fi
 
-  echo "Extracting live filesystem to ${MOUNTPOINT}..."
+  echo "Extracting live filesystem to ${mountpoint}..."
 
   case "${squashfs_type}" in
     mounted)
       # Copy from already-mounted filesystem
       echo "Copying from mounted filesystem at ${squashfs_path}..."
-      rsync -aHAXS --info=progress2 "${squashfs_path}/" "${MOUNTPOINT}/"
+      rsync -aHAXS --info=progress2 "${squashfs_path}/" "${mountpoint}/"
       ;;
     squashfs)
       # Extract squashfs file
@@ -713,7 +713,7 @@ function extract_live_filesystem() {
       fi
 
       echo "Extracting squashfs from ${squashfs_path}..."
-      unsquashfs -f -d "${MOUNTPOINT}" "${squashfs_path}"
+      unsquashfs -f -d "${mountpoint}" "${squashfs_path}"
       ;;
     *)
       echo "ERROR: Unknown squashfs type: ${squashfs_type}"
@@ -732,34 +732,34 @@ function cleanup_live_artifacts() {
   echo "Cleaning up live environment artifacts..."
 
   # Remove casper/live-boot artifacts
-  rm -f "${MOUNTPOINT}/etc/casper.conf"
-  rm -rf "${MOUNTPOINT}/etc/live"
-  rm -f "${MOUNTPOINT}/etc/fstab"
+  rm -f "${mountpoint}/etc/casper.conf"
+  rm -rf "${mountpoint}/etc/live"
+  rm -f "${mountpoint}/etc/fstab"
 
   # Create fresh fstab
-  cat > "${MOUNTPOINT}/etc/fstab" <<-EOF
+  cat > "${mountpoint}/etc/fstab" <<-EOF
 		# /etc/fstab: static file system information.
 		# <file system> <mount point> <type> <options> <dump> <pass>
 	EOF
 
   # Remove live user if exists
-  if [[ -d "${MOUNTPOINT}/home/kubuntu" ]]; then
-    rm -rf "${MOUNTPOINT}/home/kubuntu"
+  if [[ -d "${mountpoint}/home/kubuntu" ]]; then
+    rm -rf "${mountpoint}/home/kubuntu"
   fi
-  if [[ -d "${MOUNTPOINT}/home/ubuntu" ]]; then
-    rm -rf "${MOUNTPOINT}/home/ubuntu"
+  if [[ -d "${mountpoint}/home/ubuntu" ]]; then
+    rm -rf "${mountpoint}/home/ubuntu"
   fi
 
-  # Remove live-specific packages list
-  rm -f "${MOUNTPOINT}/etc/apt/sources.list.d/cdrom.list"
+  # Remove the live-specific packages list
+  rm -f "${mountpoint}/etc/apt/sources.list.d/cdrom.list"
 
   # Remove installer artifacts
-  rm -rf "${MOUNTPOINT}/var/log/installer"
-  rm -f "${MOUNTPOINT}/var/lib/dpkg/status-old"
+  rm -rf "${mountpoint}/var/log/installer"
+  rm -f "${mountpoint}/var/lib/dpkg/status-old"
 
-  # Clean apt cache from live system
-  rm -rf "${MOUNTPOINT}/var/cache/apt/archives"/*.deb
-  rm -rf "${MOUNTPOINT}/var/lib/apt/lists"/*
+  # Clean apt cache from the live system
+  rm -rf "${mountpoint}/var/cache/apt/archives"/*.deb
+  rm -rf "${mountpoint}/var/lib/apt/lists"/*
 
   echo "Cleanup complete."
 }
@@ -769,47 +769,47 @@ function cleanup_live_artifacts() {
 #######################################
 # description
 # Globals:
-#   ETH_PREFIX
+#   eth_prefix
 #   HOSTNAME
-#   INSTALL_WARNING_LEVEL
-#   LOCALE
-#   MOUNTPOINT
-#   TIMEZONE
+#   install_warning_level
+#   locale
+#   mountpoint
+#   timezone
 # Arguments:
 #  None
 #######################################
 function system_setup_part1() {
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
-		export DEBIAN_PRIORITY="${INSTALL_WARNING_LEVEL#*=}"
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
+		export DEBIAN_PRIORITY="${install_warning_level#*=}"
 	EOCHROOT
 
-  echo "${HOSTNAME}" > "${MOUNTPOINT}/etc/hostname"
-  echo "127.0.1.1       ${HOSTNAME}" >> "${MOUNTPOINT}/etc/hosts"
+  echo "${HOSTNAME}" > "${mountpoint}/etc/hostname"
+  echo "127.0.1.1       ${HOSTNAME}" >> "${mountpoint}/etc/hosts"
 
   local eth_interface
-  eth_interface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${ETH_PREFIX}*" | head -1)")"
+  eth_interface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${eth_prefix}*" | head -1)")"
 
-  # Create netplan config directory if needed
-  mkdir -p "${MOUNTPOINT}/etc/netplan"
+  # Create the netplan config directory if needed
+  mkdir -p "${mountpoint}/etc/netplan"
 
-  cat > "${MOUNTPOINT}/etc/netplan/01-${eth_interface}.yaml" <<-EOF
+  cat > "${mountpoint}/etc/netplan/01-${eth_interface}.yaml" <<-EOF
 		network:
 		  version: 2
 		  ethernets:
 		    ${eth_interface}:
 		      dhcp4: yes
 	EOF
-  chmod 600 "${MOUNTPOINT}/etc/netplan/01-${eth_interface}.yaml"
+  chmod 600 "${mountpoint}/etc/netplan/01-${eth_interface}.yaml"
 
-  mount --rbind /dev "${MOUNTPOINT}/dev"
-  mount --rbind /proc "${MOUNTPOINT}/proc"
-  mount --rbind /sys "${MOUNTPOINT}/sys"
+  mount --rbind /dev "${mountpoint}/dev"
+  mount --rbind /proc "${mountpoint}/proc"
+  mount --rbind /sys "${mountpoint}/sys"
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
-		locale-gen en_US.UTF-8 ${LOCALE}
-		echo 'LANG="${LOCALE}"' > /etc/default/locale
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
+		locale-gen en_US.UTF-8 ${locale}
+		echo 'LANG="${locale}"' > /etc/default/locale
 
-		ln -fs /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
+		ln -fs /usr/share/zoneinfo/${timezone} /etc/localtime
 		dpkg-reconfigure -f noninteractive tzdata
 	EOCHROOT
 }
@@ -817,14 +817,14 @@ function system_setup_part1() {
 #######################################
 # description
 # Globals:
-#   MOUNTPOINT
+#   mountpoint
 # Arguments:
 #  None
 #######################################
 function system_setup_part2() {
   # Most packages should already be present from the live filesystem
-  # Just ensure ZFS tools are properly configured
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+  #   to ensure ZFS tools are properly configured
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 		# Verify essential packages are present
 		if ! dpkg -l linux-image-generic &>/dev/null; then
 		  echo "ERROR: linux-image-generic not found in extracted filesystem"
@@ -847,9 +847,9 @@ function system_setup_part2() {
 #######################################
 # description
 # Globals:
-#   INITIAL_BOOT_ORDER
-#   MOUNTPOINT
-#   TIMEOUT_REFIND
+#   initial_boot_order
+#   mountpoint
+#   timeout_refind
 #   diskid
 # Arguments:
 #  None
@@ -868,7 +868,7 @@ function system_setup_part3() {
       esp_mount="/boot/efi"
     else
       esp_mount="/boot/efi${loop_counter}"
-      echo "${esp_mount}" >> "${MOUNTPOINT}/tmp/backup_esp_mounts.txt"
+      echo "${esp_mount}" >> "${mountpoint}/tmp/backup_esp_mounts.txt"
     fi
 
     echo "Creating FAT32 filesystem on ${diskid}. ESP: ${esp_mount}"
@@ -881,7 +881,7 @@ function system_setup_part3() {
     blkid_part1="$(blkid -s UUID -o value "/dev/disk/by-id/${diskid}-part1")"
     echo "${blkid_part1}" >> /tmp/esp_partition_list_uuid.txt
 
-    chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+    chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 			mkdir -p "${esp_mount}"
 			echo "/dev/disk/by-uuid/${blkid_part1} ${esp_mount} vfat defaults 0 0" >> /etc/fstab
 			mount "${esp_mount}"
@@ -897,53 +897,51 @@ function system_setup_part3() {
 
   initial_boot_order="$(efibootmgr | grep "BootOrder" | cut -d " " -f 2)"
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 		apt-get -yq install refind kexec-tools
 		apt-get install --yes dpkg-dev git systemd-sysv
 
-		sed -i 's,^timeout .*,timeout ${TIMEOUT_REFIND},' /boot/efi/EFI/refind/refind.conf
+		sed -i 's,^timeout .*,timeout ${timeout_refind},' /boot/efi/EFI/refind/refind.conf
 
 		echo REMAKE_INITRD=yes > /etc/dkms/zfs.conf
 		sed -i 's,LOAD_KEXEC=false,LOAD_KEXEC=true,' /etc/default/kexec
 	EOCHROOT
-
-  INITIAL_BOOT_ORDER="${initial_boot_order}"
 }
 
 #######################################
 # description
 # Globals:
-#   MOUNTPOINT
-#   QUIET_BOOT
-#   REMOTEACCESS_FIRST_BOOT
-#   RPOOL
-#   TIMEOUT_ZBM_NO_REMOTE
-#   ZFS_ROOT_ENCRYPT
-#   ZFS_ROOT_PASSWORD
+#   mountpoint
+#   quiet_boot
+#   remoteaccess_first_boot
+#   rpool
+#   timeout_zbm_no_remote
+#   zfs_root_encrypt
+#   zfs_root_password
 # Arguments:
 #  None
 #######################################
 function system_setup_part4() {
-  cp "/tmp/diskid_check_root.txt" "${MOUNTPOINT}/tmp/"
+  cp "/tmp/diskid_check_root.txt" "${mountpoint}/tmp/"
 
   if [[ -f "/tmp/luks_dmname_root.txt" ]]; then
-    cp "/tmp/luks_dmname_root.txt" "${MOUNTPOINT}/tmp/"
+    cp "/tmp/luks_dmname_root.txt" "${mountpoint}/tmp/"
   fi
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
-		if [[ -n "${ZFS_ROOT_PASSWORD}" ]]; then
-		  case "${ZFS_ROOT_ENCRYPT}" in
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
+		if [[ -n "${zfs_root_password}" ]]; then
+		  case "${zfs_root_encrypt}" in
 		    native)
-		      echo "${ZFS_ROOT_PASSWORD}" > /etc/zfs/${RPOOL}.key
-		      chmod 600 /etc/zfs/${RPOOL}.key
-		      zfs change-key -o keylocation=file:///etc/zfs/${RPOOL}.key \
-		        -o keyformat=passphrase ${RPOOL}
-		      zfs set org.zfsbootmenu:keysource="${RPOOL}/ROOT" ${RPOOL}
+		      echo "${zfs_root_password}" > /etc/zfs/${rpool}.key
+		      chmod 600 /etc/zfs/${rpool}.key
+		      zfs change-key -o keylocation=file:///etc/zfs/${rpool}.key \
+		        -o keyformat=passphrase ${rpool}
+		      zfs set org.zfsbootmenu:keysource="${rpool}/ROOT" ${rpool}
 		      ;;
 		    luks)
 		      mkdir -p /etc/cryptsetup-keys.d/
-		      dd if=/dev/urandom of=/etc/cryptsetup-keys.d/${RPOOL}.key bs=1024 count=4
-		      chmod 600 /etc/cryptsetup-keys.d/${RPOOL}.key
+		      dd if=/dev/urandom of=/etc/cryptsetup-keys.d/${rpool}.key bs=1024 count=4
+		      chmod 600 /etc/cryptsetup-keys.d/${rpool}.key
 		      ;;
 		  esac
 		fi
@@ -951,27 +949,27 @@ function system_setup_part4() {
 		echo "UMASK=0077" > /etc/initramfs-tools/conf.d/umask.conf
 	EOCHROOT
 
-  if [[ "${ZFS_ROOT_ENCRYPT}" == "luks" ]]; then
+  if [[ "${zfs_root_encrypt}" == "luks" ]]; then
     update_crypttab "chroot" "root"
   fi
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
-		if [[ "${QUIET_BOOT}" == "yes" ]]; then
-		  zfs set org.zfsbootmenu:commandline="spl_hostid=\$(hostid) ro quiet" "${RPOOL}/ROOT"
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
+		if [[ "${quiet_boot}" == "yes" ]]; then
+		  zfs set org.zfsbootmenu:commandline="spl_hostid=\$(hostid) ro quiet" "${rpool}/ROOT"
 		else
-		  zfs set org.zfsbootmenu:commandline="spl_hostid=\$(hostid) ro" "${RPOOL}/ROOT"
+		  zfs set org.zfsbootmenu:commandline="spl_hostid=\$(hostid) ro" "${rpool}/ROOT"
 		fi
 	EOCHROOT
 
   zfsbootmenu_install_config "chroot"
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 		cat > /boot/efi/EFI/ubuntu/refind_linux.conf <<-EOF
-			"Boot default"  "zbm.timeout=${TIMEOUT_ZBM_NO_REMOTE} ro quiet loglevel=0"
+			"Boot default"  "zbm.timeout=${timeout_zbm_no_remote} ro quiet loglevel=0"
 			"Boot to menu"  "zbm.show ro quiet loglevel=0"
 		EOF
 
-		if [[ "${QUIET_BOOT}" == "no" ]]; then
+		if [[ "${quiet_boot}" == "no" ]]; then
 		  sed -i 's,ro quiet,ro,' /boot/efi/EFI/ubuntu/refind_linux.conf
 		fi
 	EOCHROOT
@@ -984,7 +982,7 @@ function system_setup_part4() {
     zbm_multiple_esp
   fi
 
-  if [[ "${REMOTEACCESS_FIRST_BOOT}" == "yes" ]]; then
+  if [[ "${remoteaccess_first_boot}" == "yes" ]]; then
     remote_zbm_access "chroot"
   fi
 }
@@ -992,34 +990,34 @@ function system_setup_part4() {
 #######################################
 # description
 # Globals:
-#   DISKS_ROOT
-#   MOUNTPOINT
-#   PASSWORD
-#   TOPOLOGY_ROOT
-#   ZFS_ROOT_PASSWORD
+#   disks_root
+#   mountpoint
+#   password
+#   topology_root
+#   zfs_root_password
 # Arguments:
 #  None
 #######################################
 function system_setup_part5() {
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
-		echo "root:${PASSWORD}" | chpasswd -c SHA256
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
+		echo "root:${password}" | chpasswd -c SHA256
 	EOCHROOT
 
   # Configure swap
   local crypttab_params="/dev/urandom plain,swap,cipher=aes-xts-plain64:sha256,size=512"
 
-  case "${TOPOLOGY_ROOT}" in
+  case "${topology_root}" in
     single)
       local diskid
       diskid="$(cat /tmp/diskid_check_root.txt)"
-      if [[ -n "${ZFS_ROOT_PASSWORD}" ]]; then
-        chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+      if [[ -n "${zfs_root_password}" ]]; then
+        chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 					apt-get install --yes cryptsetup
 					echo "swap /dev/disk/by-id/${diskid}-part2 ${crypttab_params}" >> /etc/crypttab
 					echo "/dev/mapper/swap none swap defaults 0 0" >> /etc/fstab
 				EOCHROOT
       else
-        chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+        chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 					mkswap -f "/dev/disk/by-id/${diskid}-part2"
 					blkid_part2="\$(blkid -s UUID -o value /dev/disk/by-id/${diskid}-part2)"
 					echo "/dev/disk/by-uuid/\${blkid_part2} none swap defaults 0 0" >> /etc/fstab
@@ -1029,20 +1027,20 @@ function system_setup_part5() {
       fi
       ;;
     mirror)
-      mdadm_swap "mirror" "${DISKS_ROOT}"
+      mdadm_swap "mirror" "${disks_root}"
       ;;
     raid0)
       configure_raid0_swap
       ;;
     raidz1)
-      mdadm_swap "5" "${DISKS_ROOT}"
+      mdadm_swap "5" "${disks_root}"
       ;;
     raidz2|raidz3)
-      mdadm_swap "6" "${DISKS_ROOT}"
+      mdadm_swap "6" "${disks_root}"
       ;;
   esac
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 		cp /usr/share/systemd/tmp.mount /etc/systemd/system/
 		systemctl enable tmp.mount
 
@@ -1062,14 +1060,14 @@ function configure_raid0_swap() {
   while IFS= read -r diskid; do
     local swap_name="swap${loop_counter}"
 
-    if [[ -n "${ZFS_ROOT_PASSWORD}" ]]; then
-      echo "${swap_name} /dev/disk/by-id/${diskid}-part2 ${crypttab_params}" >> "${MOUNTPOINT}/etc/crypttab"
-      echo "/dev/mapper/${swap_name} none swap defaults,pri=1 0 0" >> "${MOUNTPOINT}/etc/fstab"
+    if [[ -n "${zfs_root_password}" ]]; then
+      echo "${swap_name} /dev/disk/by-id/${diskid}-part2 ${crypttab_params}" >> "${mountpoint}/etc/crypttab"
+      echo "/dev/mapper/${swap_name} none swap defaults,pri=1 0 0" >> "${mountpoint}/etc/fstab"
     else
       mkswap -f "/dev/disk/by-id/${diskid}-part2"
       local blkid_part2
       blkid_part2="$(blkid -s UUID -o value "/dev/disk/by-id/${diskid}-part2")"
-      echo "/dev/disk/by-uuid/${blkid_part2} none swap defaults,pri=1 0 0" >> "${MOUNTPOINT}/etc/fstab"
+      echo "/dev/disk/by-uuid/${blkid_part2} none swap defaults,pri=1 0 0" >> "${mountpoint}/etc/fstab"
     fi
 
     ((loop_counter++))
@@ -1098,7 +1096,7 @@ function mdadm_swap() {
 
   sed -i '$ s/ \\$//' "${mdadm_swap_loc}"
 
-  if [[ -n "${ZFS_ROOT_PASSWORD}" ]]; then
+  if [[ -n "${zfs_root_password}" ]]; then
     cat >> "${mdadm_swap_loc}" <<-EOF
 
 			apt-get install --yes cryptsetup
@@ -1121,8 +1119,8 @@ function mdadm_swap() {
 		mdadm --detail /dev/md0
 	EOF
 
-  cp "${mdadm_swap_loc}" "${MOUNTPOINT}/tmp/"
-  chroot "${MOUNTPOINT}" /bin/bash -x "${mdadm_swap_loc}"
+  cp "${mdadm_swap_loc}" "${mountpoint}/tmp/"
+  chroot "${mountpoint}" /bin/bash -x "${mdadm_swap_loc}"
 }
 
 
@@ -1130,10 +1128,10 @@ function mdadm_swap() {
 #######################################
 # description
 # Globals:
-#   MOUNTPOINT
-#   QUIET_BOOT
-#   ZFS_ROOT_ENCRYPT
-#   ZFS_ROOT_PASSWORD
+#   mountpoint
+#   quiet_boot
+#   zfs_root_encrypt
+#   zfs_root_password
 # Arguments:
 #   1
 #######################################
@@ -1177,7 +1175,7 @@ function zfsbootmenu_install_config() {
 	EOSCRIPT
 
   # Add quiet boot handling
-  if [[ "${QUIET_BOOT}" == "no" ]]; then
+  if [[ "${quiet_boot}" == "no" ]]; then
     cat >> "${zfsbootmenu_script}" <<-'EOF'
 
 			sed -i 's,ro quiet,ro,' /etc/zfsbootmenu/config.yaml
@@ -1185,7 +1183,7 @@ function zfsbootmenu_install_config() {
   fi
 
   # Add LUKS hook if needed
-  if [[ -n "${ZFS_ROOT_PASSWORD}" && "${ZFS_ROOT_ENCRYPT}" == "luks" ]]; then
+  if [[ -n "${zfs_root_password}" && "${zfs_root_encrypt}" == "luks" ]]; then
     cat >> "${zfsbootmenu_script}" <<-'EOF'
 
 			zfsbootmenu_hook_root="/etc/zfsbootmenu/hooks"
@@ -1207,8 +1205,8 @@ function zfsbootmenu_install_config() {
 
   case "${script_env}" in
     chroot)
-      cp "${zfsbootmenu_script}" "${MOUNTPOINT}/tmp/"
-      chroot "${MOUNTPOINT}" /bin/bash -x "${zfsbootmenu_script}"
+      cp "${zfsbootmenu_script}" "${mountpoint}/tmp/"
+      chroot "${mountpoint}" /bin/bash -x "${zfsbootmenu_script}"
       ;;
     base)
       /bin/bash "${zfsbootmenu_script}"
@@ -1223,7 +1221,7 @@ function zfsbootmenu_install_config() {
 function zbm_multiple_esp() {
   local esp_sync_path="/etc/zfsbootmenu/generate-zbm.post.d/esp-sync.sh"
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 		mkdir -p "/etc/zfsbootmenu/generate-zbm.post.d/"
 
 		cat > "${esp_sync_path}" <<-'EOT'
@@ -1270,12 +1268,13 @@ function zbm_multiple_esp() {
   for ((i = primary_esp_dec + 1; i < primary_esp_dec + num_disks; i++)); do
     revised_order="${revised_order},$(printf "%04X" "${i}")"
   done
-  revised_order="${revised_order},${INITIAL_BOOT_ORDER}"
+  revised_order="${revised_order},${initial_boot_order}"
 
   efibootmgr -o "${revised_order}"
 }
 
 # Remote access to ZFSBootMenu via SSH
+# bashsupport disable=SpellCheckingInspection
 function remote_zbm_access() {
   local script_env="$1"
 
@@ -1304,16 +1303,16 @@ function remote_zbm_access() {
 		# Setup network
 		mkdir -p /etc/cmdline.d
 
-		case "${REMOTEACCESS_IP_CONFIG}" in
+		case "${remoteaccess_ip_config}" in
 		  dhcp|dhcp,dhcp6|dhcp6)
-		    echo "ip=${REMOTEACCESS_IP_CONFIG} rd.neednet=1" > /etc/cmdline.d/dracut-network.conf
+		    echo "ip=${remoteaccess_ip_config} rd.neednet=1" > /etc/cmdline.d/dracut-network.conf
 		    ;;
 		  static)
-		    echo "ip=${REMOTEACCESS_IP}:::${REMOTEACCESS_NETMASK}:::none rd.neednet=1 rd.break" > /etc/cmdline.d/dracut-network.conf
+		    echo "ip=${remoteaccess_ip}:::${remoteaccess_netmask}:::none rd.neednet=1 rd.break" > /etc/cmdline.d/dracut-network.conf
 		    ;;
 		esac
 
-		echo 'send fqdn.fqdn "${REMOTEACCESS_HOSTNAME}";' >> /usr/lib/dracut/modules.d/35network-legacy/dhclient.conf
+		echo 'send fqdn.fqdn "${remoteaccess_hostname}";' >> /usr/lib/dracut/modules.d/35network-legacy/dhclient.conf
 
 		# Welcome message
 		cat > /etc/zfsbootmenu/dracut.conf.d/banner.txt <<-EOF
@@ -1343,21 +1342,21 @@ function remote_zbm_access() {
 			dropbear_rsa_key="/etc/dropbear/ssh_host_rsa_key"
 			dropbear_ecdsa_key="/etc/dropbear/ssh_host_ecdsa_key"
 			dropbear_ed25519_key="/etc/dropbear/ssh_host_ed25519_key"
-			#dropbear_acl="/home/${NEW_USER}/.ssh/authorized_keys"
+			#dropbear_acl="/home/${new_user}/.ssh/authorized_keys"
 		EOF
 
 		systemctl stop dropbear || true
 		systemctl disable dropbear || true
 
-		sed -i 's,zbm.timeout=${TIMEOUT_ZBM_NO_REMOTE},zbm.timeout=${TIMEOUT_ZBM_REMOTE},' /boot/efi/EFI/ubuntu/refind_linux.conf
+		sed -i 's,zbm.timeout=${timeout_zbm_no_remote},zbm.timeout=${timeout_zbm_remote},' /boot/efi/EFI/ubuntu/refind_linux.conf
 
 		generate-zbm --debug
 	EOSCRIPT
 
   case "${script_env}" in
     chroot)
-      cp /tmp/remote_zbm_access.sh "${MOUNTPOINT}/tmp/"
-      chroot "${MOUNTPOINT}" /bin/bash -x /tmp/remote_zbm_access.sh
+      cp /tmp/remote_zbm_access.sh "${mountpoint}/tmp/"
+      chroot "${mountpoint}" /bin/bash -x /tmp/remote_zbm_access.sh
       ;;
     base)
       if grep -q casper /proc/cmdline; then
@@ -1368,15 +1367,15 @@ function remote_zbm_access() {
       /bin/bash /tmp/remote_zbm_access.sh
 
       sed -i 's,#dropbear_acl,dropbear_acl,' /etc/zfsbootmenu/dracut.conf.d/dropbear.conf
-      mkdir -p "/home/${NEW_USER}/.ssh"
-      chown "${NEW_USER}:${NEW_USER}" "/home/${NEW_USER}/.ssh"
-      touch "/home/${NEW_USER}/.ssh/authorized_keys"
-      chmod 644 "/home/${NEW_USER}/.ssh/authorized_keys"
-      chown "${NEW_USER}:${NEW_USER}" "/home/${NEW_USER}/.ssh/authorized_keys"
+      mkdir -p "/home/${new_user}/.ssh"
+      chown "${new_user}:${new_user}" "/home/${new_user}/.ssh"
+      touch "/home/${new_user}/.ssh/authorized_keys"
+      chmod 644 "/home/${new_user}/.ssh/authorized_keys"
+      chown "${new_user}:${new_user}" "/home/${new_user}/.ssh/authorized_keys"
 
       echo "ZFSBootMenu remote access installed."
       echo "Connect as root on port 222: ssh root@{IP} -p 222"
-      echo "Add your SSH public key to /home/${NEW_USER}/.ssh/authorized_keys"
+      echo "Add your SSH public key to /home/${new_user}/.ssh/authorized_keys"
       echo "Then run: sudo generate-zbm"
       ;;
     *)
@@ -1390,36 +1389,36 @@ function remote_zbm_access() {
 #######################################
 # description
 # Globals:
-#   MOUNTPOINT
-#   NEW_USER
-#   PASSWORD
-#   RPOOL
+#   mountpoint
+#   new_user
+#   password
+#   rpool
 # Arguments:
 #  None
 #######################################
 function user_setup() {
-  zfs create -o mountpoint="/home/${NEW_USER}" "${RPOOL}/home/${NEW_USER}"
-  zfs create -o compression=off "${RPOOL}/home/${NEW_USER}/Videos"
-  zfs create -o compression=off "${RPOOL}/home/${NEW_USER}/Downloads"
-  zfs create -o compression=off "${RPOOL}/home/${NEW_USER}/Music"
+  zfs create -o mountpoint="/home/${new_user}" "${rpool}/home/${new_user}"
+  zfs create -o compression=off "${rpool}/home/${new_user}/Videos"
+  zfs create -o compression=off "${rpool}/home/${new_user}/Downloads"
+  zfs create -o compression=off "${rpool}/home/${new_user}/Music"
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
-		adduser --disabled-password --gecos "" "${NEW_USER}"
-		cp -a /etc/skel/. "/home/${NEW_USER}"
-		chown -R "${NEW_USER}:${NEW_USER}" "/home/${NEW_USER}"
-		usermod -a -G adm,cdrom,dip,lpadmin,lxd,plugdev,sambashare,sudo "${NEW_USER}"
-		echo "${NEW_USER}:${PASSWORD}" | chpasswd
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
+		adduser --disabled-password --gecos "" "${new_user}"
+		cp -a /etc/skel/. "/home/${new_user}"
+		chown -R "${new_user}:${new_user}" "/home/${new_user}"
+		usermod -a -G adm,cdrom,dip,lpadmin,lxd,plugdev,sambashare,sudo "${new_user}"
+		echo "${new_user}:${password}" | chpasswd
 
 		cat > /etc/sudoers.d/99-nopasswd-apt <<-EOSUDOERS
-			${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/apt
-			${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-get
-			${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-cache
-			${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/dpkg
-			${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/snap
-			${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/flatpak
-			${NEW_USER} ALL=(ALL) NOPASSWD: /usr/bin/plasma-discover
-			${NEW_USER} ALL=(ALL) NOPASSWD: /usr/lib/x86_64-linux-gnu/libexec/discover/DiscoverNotifier
-			${NEW_USER} ALL=(ALL) NOPASSWD: /usr/libexec/packagekitd
+			${new_user} ALL=(ALL) NOPASSWD: /usr/bin/apt
+			${new_user} ALL=(ALL) NOPASSWD: /usr/bin/apt-get
+			${new_user} ALL=(ALL) NOPASSWD: /usr/bin/apt-cache
+			${new_user} ALL=(ALL) NOPASSWD: /usr/bin/dpkg
+			${new_user} ALL=(ALL) NOPASSWD: /usr/bin/snap
+			${new_user} ALL=(ALL) NOPASSWD: /usr/bin/flatpak
+			${new_user} ALL=(ALL) NOPASSWD: /usr/bin/plasma-discover
+			${new_user} ALL=(ALL) NOPASSWD: /usr/lib/x86_64-linux-gnu/libexec/discover/DiscoverNotifier
+			${new_user} ALL=(ALL) NOPASSWD: /usr/libexec/packagekitd
 		EOSUDOERS
 		chmod 440 /etc/sudoers.d/99-nopasswd-apt
 	EOCHROOT
@@ -1429,18 +1428,18 @@ function user_setup() {
 # description
 # Globals:
 #   debian_priority
-#   DISTRO_VARIANT
-#   INSTALL_WARNING_LEVEL
-#   MIRROR_ARCHIVE
-#   RPOOL
+#   distro_variant
+#   install_warning_level
+#   mirror_archive
+#   rpool
 # Arguments:
 #  None
 #######################################
 function distro_install() {
   # Desktop already installed from squashfs, just update and ensure packages
-  export debian_priority="${INSTALL_WARNING_LEVEL#*=}"
+  export debian_priority="${install_warning_level#*=}"
 
-  if [[ -n "${MIRROR_ARCHIVE}" ]]; then
+  if [[ -n "${mirror_archive}" ]]; then
     apt_mirror_source
   fi
 
@@ -1448,14 +1447,14 @@ function distro_install() {
   apt-get dist-upgrade --yes
 
   # Create AccountsService dataset for desktop variants
-  if [[ "${DISTRO_VARIANT}" != "server" ]]; then
-    if ! zfs list "${RPOOL}/var/lib/AccountsService" &>/dev/null; then
-      zfs create "${RPOOL}/var/lib/AccountsService"
+  if [[ "${distro_variant}" != "server" ]]; then
+    if ! zfs list "${rpool}/var/lib/AccountsService" &>/dev/null; then
+      zfs create "${rpool}/var/lib/AccountsService"
     fi
   fi
 
   # Ensure the correct display manager is set
-  case "${DISTRO_VARIANT}" in
+  case "${distro_variant}" in
     server)
       # Server variant - no display manager needed
       ;;
@@ -1477,7 +1476,7 @@ function distro_install() {
 #######################################
 # description
 # Globals:
-#   ETH_PREFIX
+#   eth_prefix
 # Arguments:
 #  None
 # Returns:
@@ -1489,7 +1488,7 @@ function network_manager_config() {
   fi
 
   local eth_interface
-  eth_interface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${ETH_PREFIX}*" | head -1)")"
+  eth_interface="$(basename "$(find /sys/class/net -maxdepth 1 -mindepth 1 -name "${eth_prefix}*" | head -1)")"
 
   rm -f "/etc/netplan/01-${eth_interface}.yaml"
 
@@ -1507,7 +1506,7 @@ function network_manager_config() {
 #######################################
 # description
 # Globals:
-#   RPOOL
+#   rpool
 # Arguments:
 #  None
 #######################################
@@ -1518,7 +1517,7 @@ function sanoid_install() {
   mkdir -p /etc/sanoid
 
   cat > /etc/sanoid/sanoid.conf <<-EOF
-		[${RPOOL}/ROOT]
+		[${rpool}/ROOT]
 		  use_template = template_production
 		  recursive = yes
 		  process_children_only = yes
@@ -1538,7 +1537,7 @@ function sanoid_install() {
   local pre_apt_prefix="pre-apt"
 
   cat > /etc/apt/apt.conf.d/80-zfs-snapshot <<-EOF
-		DPkg::Pre-Invoke { "echo 'Creating ZFS snapshot.'; ts=${pre_apt_prefix}_\$(date +%F_%H:%M:%S); zfs snapshot -r ${RPOOL}/ROOT@\${ts} && zfs destroy ${RPOOL}/ROOT@\${ts} || true"; };
+		DPkg::Pre-Invoke { "echo 'Creating ZFS snapshot.'; ts=${pre_apt_prefix}_\$(date +%F_%H:%M:%S); zfs snapshot -r ${rpool}/ROOT@\${ts} && zfs destroy ${rpool}/ROOT@\${ts} || true"; };
 	EOF
 
   cat > /usr/local/bin/apt-snapshot-prune.sh <<-'EOF'
@@ -1587,14 +1586,14 @@ function sanoid_install() {
 #######################################
 # description
 # Globals:
-#   EXTRA_PROGRAMS
+#   extra_programs
 # Arguments:
 #  None
 # Returns:
 #   0 ...
 #######################################
 function extra_programs_install() {
-  if [[ "${EXTRA_PROGRAMS}" != "yes" ]]; then
+  if [[ "${extra_programs}" != "yes" ]]; then
     return 0
   fi
 
@@ -1606,12 +1605,12 @@ function extra_programs_install() {
 #######################################
 # description
 # Globals:
-#   MOUNTPOINT
+#   mountpoint
 # Arguments:
 #  None
 #######################################
 function log_compress_disable() {
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-'EOCHROOT'
+  chroot "${mountpoint}" /bin/bash -x <<-'EOCHROOT'
 		for file in /etc/logrotate.d/*; do
 		  if grep -Eq "(^|[^#y])compress" "${file}"; then
 		    sed -i -r "s/(^|[^#y])(compress)/\1#\2/" "${file}"
@@ -1624,14 +1623,14 @@ function log_compress_disable() {
 # description
 # Globals:
 #   kb_console_settings
-#   MOUNTPOINT
+#   mountpoint
 # Arguments:
 #  None
 #######################################
 function keyboard_console_setup() {
-  cp "${kb_console_settings}" "${MOUNTPOINT}/tmp/"
+  cp "${kb_console_settings}" "${mountpoint}/tmp/"
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 		apt-get install -y debconf-utils
 		debconf-set-selections < "/tmp/$(basename "${kb_console_settings}")"
 		rm -f /etc/default/keyboard
@@ -1643,47 +1642,47 @@ function keyboard_console_setup() {
 #######################################
 # description
 # Globals:
-#   MOUNTPOINT
+#   mountpoint
 #   rootzfs_full_name
-#   RPOOL
+#   rpool
 # Arguments:
 #  None
 #######################################
 function fix_fs_mount_order() {
   identify_ubuntu_dataset_uuid
 
-  chroot "${MOUNTPOINT}" /bin/bash -x <<-EOCHROOT
+  chroot "${mountpoint}" /bin/bash -x <<-EOCHROOT
 		mkdir -p /etc/zfs/zfs-list.cache
-		touch "/etc/zfs/zfs-list.cache/${RPOOL}"
+		touch "/etc/zfs/zfs-list.cache/${rpool}"
 
 		zed -F &
 		sleep 2
 
-		while [[ ! -s "/etc/zfs/zfs-list.cache/${RPOOL}" ]]; do
-		  zfs set canmount=noauto "${RPOOL}/ROOT/${rootzfs_full_name}"
+		while [[ ! -s "/etc/zfs/zfs-list.cache/${rpool}" ]]; do
+		  zfs set canmount=noauto "${rpool}/ROOT/${rootzfs_full_name}"
 		  sleep 1
 		done
 
 		pkill -9 "zed" || true
 		sleep 2
 
-		sed -Ei "s|${MOUNTPOINT}/?|/|" "/etc/zfs/zfs-list.cache/${RPOOL}"
+		sed -Ei "s|${mountpoint}/?|/|" "/etc/zfs/zfs-list.cache/${rpool}"
 	EOCHROOT
 }
 
 #######################################
 # description
 # Globals:
-#   MOUNTPOINT
+#   mountpoint
 # Arguments:
 #  None
 #######################################
 function unmount_datasets() {
-  mount --make-rslave "${MOUNTPOINT}/dev"
-  mount --make-rslave "${MOUNTPOINT}/proc"
-  mount --make-rslave "${MOUNTPOINT}/sys"
+  mount --make-rslave "${mountpoint}/dev"
+  mount --make-rslave "${mountpoint}/proc"
+  mount --make-rslave "${mountpoint}/sys"
 
-  grep "${MOUNTPOINT}" /proc/mounts | cut -f2 -d" " | sort -r | xargs -r umount -n
+  grep "${mountpoint}" /proc/mounts | cut -f2 -d" " | sort -r | xargs -r umount -n
 }
 
 
@@ -1691,26 +1690,27 @@ function unmount_datasets() {
 #######################################
 # description
 # Globals:
-#   DATAPOOL
-#   DATAPOOL_MOUNT
-#   NEW_USER
-#   RPOOL
-#   ZFS_DATA_ENCRYPT
-#   ZFS_DATA_PASSWORD
+#   datapool
+#   datapool_mount
+#   new_user
+#   rpool
+#   zfs_data_encrypt
+#   zfs_data_password
 #   _
 # Arguments:
 #  None
 #######################################
 function create_data_pool() {
+  local _
   disclaimer
 
-  if zpool status "${DATAPOOL}" &>/dev/null; then
-    echo "Warning: ${DATAPOOL} already exists. Continue to destroy it?"
+  if zpool status "${datapool}" &>/dev/null; then
+    echo "Warning: ${datapool} already exists. Continue to destroy it?"
     echo "Press Enter to Continue or CTRL+C to abort."
     read -r _
   fi
 
-  if [[ -n "${ZFS_DATA_PASSWORD}" ]]; then
+  if [[ -n "${zfs_data_password}" ]]; then
     echo "Warning: Data pool will use root pool keyfile for auto-unlock."
     echo "Press Enter to Continue or CTRL+C to abort."
     read -r _
@@ -1721,31 +1721,31 @@ function create_data_pool() {
   partprobe
   sleep 2
 
-  if [[ ! -d "${DATAPOOL_MOUNT}" ]]; then
-    mkdir -p "${DATAPOOL_MOUNT}"
-    chown "${NEW_USER}:${NEW_USER}" "${DATAPOOL_MOUNT}"
+  if [[ ! -d "${datapool_mount}" ]]; then
+    mkdir -p "${datapool_mount}"
+    chown "${new_user}:${new_user}" "${datapool_mount}"
   fi
 
-  touch "/etc/zfs/zfs-list.cache/${DATAPOOL}"
+  touch "/etc/zfs/zfs-list.cache/${datapool}"
 
   create_zpool "data"
 
-  if [[ "${ZFS_DATA_ENCRYPT}" == "luks" ]]; then
-    if [[ -f "/etc/cryptsetup-keys.d/${RPOOL}.key" ]]; then
+  if [[ "${zfs_data_encrypt}" == "luks" ]]; then
+    if [[ -f "/etc/cryptsetup-keys.d/${rpool}.key" ]]; then
       update_crypttab "base" "data"
     else
-      echo "${RPOOL}.key not found."
+      echo "${rpool}.key not found."
       exit 1
     fi
   fi
 
-  while [[ ! -s "/etc/zfs/zfs-list.cache/${DATAPOOL}" ]]; do
-    zfs set canmount=on "${DATAPOOL}"
+  while [[ ! -s "/etc/zfs/zfs-list.cache/${datapool}" ]]; do
+    zfs set canmount=on "${datapool}"
     sleep 1
   done
 
-  ln -s "${DATAPOOL_MOUNT}" "/home/${NEW_USER}/"
-  chown -R "${NEW_USER}:${NEW_USER}" "${DATAPOOL_MOUNT}" "/home/${NEW_USER}/${DATAPOOL}"
+  ln -s "${datapool_mount}" "/home/${new_user}/"
+  chown -R "${new_user}:${new_user}" "${datapool_mount}" "/home/${new_user}/${datapool}"
 
   zpool status
   zfs list
@@ -1761,6 +1761,7 @@ function create_data_pool() {
 #  None
 #######################################
 function reinstall_zbm() {
+  local choice
   disclaimer
   connectivity_check
 
@@ -1796,13 +1797,11 @@ function reinstall_zbm() {
   zfsbootmenu_install_config "base"
 }
 
-
-
 #######################################
 # description
 # Globals:
-#   NEW_USER
-#   PASSWORD
+#   new_user
+#   password
 # Arguments:
 #  None
 #######################################
@@ -1829,19 +1828,20 @@ function initial_install() {
 
   echo "Initial setup complete."
   echo "Reboot required."
-  echo "First login: ${NEW_USER}:${PASSWORD}"
+  echo "First login: ${new_user}:${password}"
   echo "After reboot, run script with 'postreboot' option."
 }
 
 #######################################
 # description
 # Globals:
-#   DISTRO_VARIANT
+#   distro_variant
 #   _
 # Arguments:
 #  None
 #######################################
 function post_reboot() {
+  local _
   disclaimer
 
   # Check internet connectivity for post-reboot operations
@@ -1861,7 +1861,7 @@ function post_reboot() {
   timedatectl set-local-rtc 1 --adjust-system-clock
   echo "RTC set to local time for Windows dual boot."
 
-  echo "Installation complete: ${DISTRO_VARIANT}."
+  echo "Installation complete: ${distro_variant}."
   echo "Reboot recommended."
 }
 
@@ -1880,63 +1880,48 @@ function setup_remote_access() {
   remote_zbm_access "base"
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #######################################
 # description
 # Globals:
-#   DATAPOOL
-#   DATAPOOL_MOUNT
-#   DISKS_DATA
-#   DISKS_ROOT
-#   DISTRO_VARIANT
-#   EFI_BOOT_SIZE
-#   ETH_PREFIX
-#   EXTRA_PROGRAMS
+#   datapool
+#   datapool_mount
+#   disks_data
+#   disks_root
+#   distro_variant
+#   efi_boot_size
+#   eth_prefix
+#   extra_programs
 #   HOSTNAME
-#   INSTALL_LOG
-#   INSTALL_WARNING_LEVEL
-#   LOCALE
-#   LOG_LOC
-#   MIRROR_ARCHIVE
-#   MOUNTPOINT
-#   NEW_USER
-#   PASSWORD
-#   QUIET_BOOT
-#   REMOTEACCESS_FIRST_BOOT
-#   REMOTEACCESS_HOSTNAME
-#   REMOTEACCESS_IP
-#   REMOTEACCESS_IP_CONFIG
-#   REMOTEACCESS_NETMASK
-#   RPOOL
-#   TIMEOUT_REFIND
-#   TIMEOUT_ZBM_NO_REMOTE
-#   TIMEOUT_ZBM_REMOTE
-#   TIMEZONE
-#   TOPOLOGY_DATA
-#   TOPOLOGY_ROOT
-#   UBUNTU_ORIGINAL
-#   UBUNTU_VER
-#   ZFS_COMPRESSION
-#   ZFS_DATA_ENCRYPT
-#   ZFS_DATA_PASSWORD
-#   ZFS_DPOOL_ASHIFT
-#   ZFS_ROOT_ENCRYPT
-#   ZFS_ROOT_PASSWORD
-#   ZFS_RPOOL_ASHIFT
+#   install_log
+#   install_warning_level
+#   locale
+#   log_loc
+#   mirror_archive
+#   mountpoint
+#   new_user
+#   password
+#   quiet_boot
+#   remoteaccess_first_boot
+#   remoteaccess_hostname
+#   remoteaccess_ip
+#   remoteaccess_ip_config
+#   remoteaccess_netmask
+#   rpool
+#   timeout_refind
+#   timeout_zbm_no_remote
+#   timeout_zbm_remote
+#   timezone
+#   topology_data
+#   topology_root
+#   ubuntu_original
+#   ubuntu_ver
+#   zfs_compression
+#   zfs_data_encrypt
+#   zfs_data_password
+#   zfs_dpool_ashift
+#   zfs_root_encrypt
+#   zfs_root_password
+#   zfs_rpool_ashift
 #   _
 #   swap_size
 #   total_ram_mb
@@ -1946,10 +1931,7 @@ function setup_remote_access() {
 #######################################
 function main() {
 # shellcheck disable=SC2317  # Don't warn about unreachable commands
-
-
 set -euo pipefail
-
 
 #######################################
 # Configuration Variables
@@ -1957,94 +1939,93 @@ set -euo pipefail
 
 
 # Ubuntu release and variant
-readonly UBUNTU_VER="questing"
+readonly ubuntu_ver="questing"
 # jammy (22.04), noble (24.04), questing (25.10)
-readonly DISTRO_VARIANT="kubuntu"
+readonly distro_variant="kubuntu"
 # server, desktop, kubuntu, xubuntu, budgie, MATE
 
 
 # User account
-readonly NEW_USER="me"
-readonly PASSWORD="Willy123$"
+readonly new_user="me"
+readonly password="Willy123$"
 readonly HOSTNAME="precision"
 
 
 # ZFS root pool encryption
-readonly ZFS_ROOT_PASSWORD=""
-# Minimum 8 chars, empty for no encryption
-readonly ZFS_ROOT_ENCRYPT="native"
-# native or luks
-
+readonly zfs_root_password=""
+# Minimum 8 chars, empty with no encryption
+readonly zfs_root_encrypt="native"
 
 # Locale and timezone
-readonly LOCALE="en_US.UTF-8"
-readonly TIMEZONE="America/New_York"
+readonly locale="en_US.UTF-8"
+readonly timezone="America/New_York"
 
 
 # ZFS pool settings
-readonly ZFS_RPOOL_ASHIFT="12"
+readonly zfs_rpool_ashift="12"
 # 9=512B, 12=4KiB, 13=8KiB sectors
-readonly ZFS_COMPRESSION="zstd"
+readonly zfs_compression="zstd"
 # lz4 or zstd
-readonly MIRROR_ARCHIVE=""
+readonly mirror_archive=""
 # ISO 3166-1 alpha-2 country code or empty
 
 
 # Root pool configuration
-readonly RPOOL="rpool"
-readonly TOPOLOGY_ROOT="raidz1"
+readonly rpool="rpool"
+readonly topology_root="raidz1"
 # single, mirror, raid0, raidz1, raidz2, raidz3
-readonly DISKS_ROOT="3"
+readonly disks_root="3"
 # Number of disks (ignored for single)
-readonly EFI_BOOT_SIZE="512"
+readonly efi_boot_size="512"
 # EFI partition size in MiB
 swap_size=""
 # Empty for auto-calculate based on RAM
 
 
 # Data pool configuration
-readonly DATAPOOL="datapool"
-readonly TOPOLOGY_DATA="single"
+readonly datapool="datapool"
+readonly topology_data="single"
 # single, mirror, raid0, raidz1, raidz2, raidz3
 # shellcheck disable=SC2034  # Used via indirect reference
-readonly DISKS_DATA="1"
+local disks_data
+readonly disks_data="1"
 # Number of disks (ignored for single)
-readonly ZFS_DATA_PASSWORD=""
-# Only used if root pool has no password
-readonly ZFS_DATA_ENCRYPT="native"
+readonly zfs_data_password=""
+# Only used if the root pool has no password
+readonly zfs_data_encrypt="native"
 # native or luks
-readonly DATAPOOL_MOUNT="/mnt/${DATAPOOL}"
-readonly ZFS_DPOOL_ASHIFT="12"
+readonly datapool_mount="/mnt/${datapool}"
+readonly zfs_dpool_ashift="12"
 
 
 # Installation paths
-readonly MOUNTPOINT="/mnt/ub_server"
-readonly INSTALL_LOG="ubuntu_setup_zfs_root.log"
-readonly LOG_LOC="/var/log"
+readonly mountpoint="/mnt/ub_server"
+readonly install_log="ubuntu_setup_zfs_root.log"
+readonly log_loc="/var/log"
 
 
 # Boot and remote access settings
-readonly REMOTEACCESS_FIRST_BOOT="no"
-readonly TIMEOUT_REFIND="3"
-readonly TIMEOUT_ZBM_NO_REMOTE="3"
-readonly TIMEOUT_ZBM_REMOTE="45"
-readonly QUIET_BOOT="yes"
+readonly remoteaccess_first_boot="no"
+readonly timeout_refind="3"
+readonly timeout_zbm_no_remote="3"
+readonly timeout_zbm_remote="45"
+readonly quiet_boot="yes"
 
 
 # Network settings
-readonly ETH_PREFIX="e"
-readonly REMOTEACCESS_HOSTNAME="zbm"
-readonly REMOTEACCESS_IP_CONFIG="dhcp"
+readonly eth_prefix="e"
+readonly remoteaccess_hostname="zbm"
+readonly remoteaccess_ip_config="dhcp"
 # dhcp, dhcp,dhcp6, dhcp6, or static
-readonly REMOTEACCESS_IP="192.168.0.222"
-readonly REMOTEACCESS_NETMASK="255.255.255.0"
+readonly remoteaccess_ip="192.168.0.222"
+readonly remoteaccess_netmask="255.255.255.0"
 
 
 # Package sources
-readonly UBUNTU_ORIGINAL="http://atl.mirrors.clouvider.net/ubuntu/"
-readonly INSTALL_WARNING_LEVEL="PRIORITY=critical"
+readonly ubuntu_original="https://atl.mirrors.clouvider.net/ubuntu/"
+readonly install_warning_level="PRIORITY=critical"
 # or FRONTEND=noninteractive
-readonly EXTRA_PROGRAMS="yes"
+readonly extra_programs="yes"
 
 
 #######################################
@@ -2068,94 +2049,41 @@ else
 fi
 
 
-# Check encryption method is defined if password is set
-if [[ -n "${ZFS_ROOT_PASSWORD}" && -z "${ZFS_ROOT_ENCRYPT}" ]]; then
+# Check encryption method is defined if a password is set
+if [[ -n "${zfs_root_password}" && -z "${zfs_root_encrypt}" ]]; then
   echo "Password entered but no encryption method defined."
   exit 1
 fi
 
 
 # Auto-calculate swap size based on system RAM if not set
+  local total_ram_mb
 if [[ -z "${swap_size}" ]]; then
   total_ram_mb=$(free -m | awk '/^Mem:/{print $2}')
 
-  case "${TOPOLOGY_ROOT}" in
+  case "${topology_root}" in
     single|mirror)
       swap_size="${total_ram_mb}"
       ;;
     raid0)
-      swap_size=$((total_ram_mb / DISKS_ROOT))
+      swap_size=$((total_ram_mb / disks_root))
       ;;
     raidz1)
-      swap_size=$((total_ram_mb / (DISKS_ROOT - 1)))
+      swap_size=$((total_ram_mb / (disks_root - 1)))
       ;;
     raidz2)
-      swap_size=$((total_ram_mb / (DISKS_ROOT - 2)))
+      swap_size=$((total_ram_mb / (disks_root - 2)))
       ;;
     raidz3)
-      swap_size=$((total_ram_mb / (DISKS_ROOT - 3)))
+      swap_size=$((total_ram_mb / (disks_root - 3)))
       ;;
   esac
 
   echo "Auto-calculated swap_size: ${swap_size} MiB per disk"
 fi
 
-
-#######################################
-# Utility Functions
-#######################################
-
-
-#######################################
-# ZFS Pool Functions
-#######################################
-
-
-#######################################
-# Debootstrap Functions
-#######################################
-
-
-#######################################
-# System Setup Functions
-#######################################
-
-
-#######################################
-# ZFSBootMenu Functions
-#######################################
-
-
-#######################################
-# User and Post-Install Functions
-#######################################
-
-
-#######################################
-# Data Pool Functions
-#######################################
-
-
-#######################################
-# Reinstall Functions
-#######################################
-
-
-#######################################
-# Main Entry Points
-#######################################
-
-
-#######################################
-# Script Execution
-#######################################
-
-
 log_func
 date
-
-
-# Update system time
 timedatectl || true
 if systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
   systemctl restart systemd-timesyncd.service || true
@@ -2164,8 +2092,7 @@ elif systemctl is-active --quiet chrony 2>/dev/null; then
   chronyc makestep || true
 fi
 timedatectl || true
-
-
+  local _
 case "${1:-}" in
   initial)
     echo "Running initial system installation."
