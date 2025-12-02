@@ -153,8 +153,8 @@ function keyboard_console_settings() {
 # Check minimum disk count for topology
 function topology_min_disk_check() {
   local pool="$1"
-  local topology_var="TOPOLOGY_${pool^^}"
-  local disks_var="DISKS_${pool^^}"
+  local topology_var="topology_${pool}"
+  local disks_var="disks_${pool}"
   local topology="${!topology_var}"
   local disks="${!disks_var}"
 
