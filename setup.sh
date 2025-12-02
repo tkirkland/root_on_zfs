@@ -202,7 +202,7 @@ function get_disk_id() {
 
   find /dev/disk/by-id -maxdepth 1 -type l ! -name '*-part*' \
     -exec sh -c 'for f; do printf "%s %s\n" "$(basename "$f")" "$(readlink "$f")"; done' _ {} + \
-    | grep -v "CD-ROM" > "${diskid_menu}"
+    | grep -vE "(CD-ROM|^nvme-eui\.|^nvme-nvme\.|_1 )" > "${diskid_menu}"
 
   echo "Please select Disk ID for disk ${disk_num} of ${total_disks} on ${pool} pool."
   nl "${diskid_menu}"
