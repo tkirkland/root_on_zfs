@@ -554,7 +554,7 @@ EOSCRIPT
 
 
 #######################################
-# description
+# Prepare disks and partitions for ZFS installation.
 # Globals:
 #   debian_priority
 #   efi_boot_size
@@ -628,7 +628,7 @@ function prepare_install_environment() {
 }
 
 #######################################
-# description
+# Create root ZFS pool and filesystem datasets.
 # Globals:
 #   mountpoint
 #   rootzfs_full_name
@@ -680,7 +680,7 @@ function create_zfs_pools() {
 }
 
 #######################################
-# description
+# Extract Ubuntu live filesystem to the ZFS mountpoint.
 # Globals:
 #   mountpoint
 #   squashfs_path
@@ -767,7 +767,7 @@ function cleanup_live_artifacts() {
 
 
 #######################################
-# description
+# Configure hostname, networking, locale, and timezone.
 # Globals:
 #   eth_prefix
 #   HOSTNAME
@@ -815,7 +815,7 @@ function system_setup_part1() {
 }
 
 #######################################
-# description
+# Verify essential packages and enable ZFS services.
 # Globals:
 #   mountpoint
 # Arguments:
@@ -845,7 +845,7 @@ function system_setup_part2() {
 }
 
 #######################################
-# description
+# Set up EFI partitions and install rEFInd boot manager.
 # Globals:
 #   initial_boot_order
 #   mountpoint
@@ -909,7 +909,7 @@ function system_setup_part3() {
 }
 
 #######################################
-# description
+# Configure ZFS encryption keys and install ZFSBootMenu.
 # Globals:
 #   mountpoint
 #   quiet_boot
@@ -988,7 +988,7 @@ function system_setup_part4() {
 }
 
 #######################################
-# description
+# Set root password and configure swap partitions.
 # Globals:
 #   disks_root
 #   mountpoint
@@ -1126,14 +1126,14 @@ function mdadm_swap() {
 
 
 #######################################
-# description
+# Install and configure ZFSBootMenu from source.
 # Globals:
 #   mountpoint
 #   quiet_boot
 #   zfs_root_encrypt
 #   zfs_root_password
 # Arguments:
-#   1
+#   $1 - Script environment: "chroot" or "base"
 #######################################
 function zfsbootmenu_install_config() {
   local script_env="$1"
@@ -1387,7 +1387,7 @@ function remote_zbm_access() {
 
 
 #######################################
-# description
+# Create user account and home directory datasets.
 # Globals:
 #   mountpoint
 #   new_user
@@ -1425,7 +1425,7 @@ function user_setup() {
 }
 
 #######################################
-# description
+# Update system packages and configure display manager.
 # Globals:
 #   debian_priority
 #   distro_variant
@@ -1474,13 +1474,13 @@ function distro_install() {
 }
 
 #######################################
-# description
+# Switch from netplan to NetworkManager for desktop.
 # Globals:
 #   eth_prefix
 # Arguments:
 #  None
 # Returns:
-#   0 ...
+#   0 if NetworkManager is not installed
 #######################################
 function network_manager_config() {
   if ! dpkg-query --show --showformat='${db:Status-Status}\n' "network-manager" 2>/dev/null | grep -q "installed"; then
@@ -1504,7 +1504,7 @@ function network_manager_config() {
 }
 
 #######################################
-# description
+# Install and configure Sanoid for ZFS snapshot management.
 # Globals:
 #   rpool
 # Arguments:
@@ -1584,13 +1584,13 @@ function sanoid_install() {
 }
 
 #######################################
-# description
+# Install optional utility programs (SSH, CIFS, man pages).
 # Globals:
 #   extra_programs
 # Arguments:
 #  None
 # Returns:
-#   0 ...
+#   0 if extra_programs is not "yes"
 #######################################
 function extra_programs_install() {
   if [[ "${extra_programs}" != "yes" ]]; then
@@ -1603,7 +1603,7 @@ function extra_programs_install() {
 }
 
 #######################################
-# description
+# Disable log compression since ZFS handles compression.
 # Globals:
 #   mountpoint
 # Arguments:
@@ -1620,7 +1620,7 @@ function log_compress_disable() {
 }
 
 #######################################
-# description
+# Apply saved keyboard and console settings to new system.
 # Globals:
 #   kb_console_settings
 #   mountpoint
@@ -1640,7 +1640,7 @@ function keyboard_console_setup() {
 }
 
 #######################################
-# description
+# Configure ZFS mount ordering via zfs-list.cache.
 # Globals:
 #   mountpoint
 #   rootzfs_full_name
@@ -1671,7 +1671,7 @@ function fix_fs_mount_order() {
 }
 
 #######################################
-# description
+# Unmount all filesystems under the mountpoint.
 # Globals:
 #   mountpoint
 # Arguments:
@@ -1688,7 +1688,7 @@ function unmount_datasets() {
 
 
 #######################################
-# description
+# Create a separate ZFS data pool on non-root disks.
 # Globals:
 #   datapool
 #   datapool_mount
@@ -1754,7 +1754,7 @@ function create_data_pool() {
 
 
 #######################################
-# description
+# Reinstall or update ZFSBootMenu to latest version.
 # Globals:
 #   choice
 # Arguments:
@@ -1798,7 +1798,7 @@ function reinstall_zbm() {
 }
 
 #######################################
-# description
+# Run complete initial Ubuntu on ZFS installation.
 # Globals:
 #   new_user
 #   password
@@ -1833,7 +1833,7 @@ function initial_install() {
 }
 
 #######################################
-# description
+# Complete installation after first reboot into new system.
 # Globals:
 #   distro_variant
 #   _
@@ -1866,7 +1866,7 @@ function post_reboot() {
 }
 
 #######################################
-# description
+# Install SSH-based remote access to ZFSBootMenu.
 # Arguments:
 #  None
 #######################################
@@ -1881,7 +1881,7 @@ function setup_remote_access() {
 }
 
 #######################################
-# description
+# Main entry point - parse arguments and dispatch commands.
 # Globals:
 #   datapool
 #   datapool_mount
@@ -1926,8 +1926,7 @@ function setup_remote_access() {
 #   swap_size
 #   total_ram_mb
 # Arguments:
-#   0
-#   1
+#   $1 - Command: initial, postreboot, remoteaccess, datapool, reinstall-zbm
 #######################################
 function main() {
 # shellcheck disable=SC2317  # Don't warn about unreachable commands
